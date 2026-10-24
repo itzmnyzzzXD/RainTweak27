@@ -58,6 +58,33 @@ UIColor *hexToUIColor(NSString *hex) {
     return nil;
 }
 
+UIWindow *getForegroundKeyWindow(void) {
+    UIApplication *application = [UIApplication sharedApplication];
+    UIWindow *fallbackWindow = nil;
+
+    for (UIScene *scene in application.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) {
+            continue;
+        }
+
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        if (windowScene.activationState != UISceneActivationStateForegroundActive) {
+            continue;
+        }
+
+        for (UIWindow *window in windowScene.windows) {
+            if (window.isKeyWindow) {
+                return window;
+            }
+            if (!fallbackWindow) {
+                fallbackWindow = window;
+            }
+        }
+    }
+
+    return fallbackWindow;
+}
+
 void showErrorAlert(NSString *title, NSString *message, void (^completion)(void)) {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIAlertController *alert =
@@ -75,16 +102,14 @@ void showErrorAlert(NSString *title, NSString *message, void (^completion)(void)
 
         [alert addAction:okAction];
 
-        UIWindow *window = nil;
-        NSArray *windows = [[UIApplication sharedApplication] windows];
-        for (UIWindow *w in windows) {
-            if (w.isKeyWindow) {
-                window = w;
-                break;
-            }
+        UIWindow *window = getForegroundKeyWindow();
+        UIViewController *presenter = window.rootViewController;
+        while (presenter.presentedViewController && !presenter.presentedViewController.isBeingDismissed) {
+            presenter = presenter.presentedViewController;
         }
-
-        [window.rootViewController presentViewController:alert animated:YES completion:nil];
+        if (presenter) {
+            [presenter presentViewController:alert animated:YES completion:nil];
+        }
     });
 }
 
@@ -225,9 +250,10 @@ void toggleSafeMode(void) {
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.4 * NSEC_PER_SEC), dispatch_get_main_queue(),
                    ^{
-                       UIViewController *rootVC =
-                           [UIApplication sharedApplication].windows.firstObject.rootViewController;
-                       reloadApp(rootVC);
+                       UIViewController *rootVC = getForegroundKeyWindow().rootViewController;
+                       if (rootVC) {
+                           reloadApp(rootVC);
+                       }
                    });
 }
 
