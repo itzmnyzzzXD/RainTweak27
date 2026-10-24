@@ -6,6 +6,11 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @interface BunnySettingsViewController () <UIDocumentPickerDelegate>
+- (void)showThemeLibrary;
+- (void)importThemeJSON;
+- (void)disableActiveTheme;
+- (void)applyThemeAtURL:(NSURL *)themeURL;
+- (void)copyDiagnostics;
 @end
 
 static NSURL *themeDirectoryURL(void) {
