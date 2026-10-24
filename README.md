@@ -5,7 +5,7 @@ Tweak to inject Rain into discord
 ## Installation
 
 The latest builds can be found in the [Releases](https://codeberg.org/raincord/RainTweak/releases) tab.
-**iOS 27 is NOT officially supported, you will encounter bugs**
+**iOS 27 support is experimental.** The fork now builds against the latest iOS SDK available on its CI runner, but runtime compatibility still needs device testing.
 
 <details>
 <summary>Issues & Workaround</summary>
@@ -35,3 +35,17 @@ To resolve the fixable issue, you need to match the app's bundle ID with your pr
 ## Doing this will break notifications if the app is backgrounded or closed
 
 </details>
+
+
+## RainTweak27 build artifacts (no local Xcode required)
+
+This fork includes a GitHub Actions workflow that builds the tweak, injects it into a supplied decrypted Discord IPA, validates the output archive, and uploads `RainTweak.ipa` as a downloadable workflow artifact.
+
+1. Open **Actions → Build IPA Artifact → Run workflow**.
+2. Paste a direct **HTTPS download URL for a decrypted Discord IPA** into `ipa_url`.
+3. Run the workflow and wait for the build job to finish.
+4. Open that run and download the **RainTweak27 IPA** artifact ZIP. Extract `RainTweak.ipa` from it.
+
+The workflow uses GitHub's `xcode-27` runner and doesn't require Xcode to be installed on your own device. It does still require a compatible input IPA; the workflow cannot safely obtain or decrypt Discord's proprietary app package automatically. The resulting IPA is unsigned or has signing removed by the injection tooling, so install it through your usual sideloading/signing process.
+
+The workflow preserves the original package build and app-injection flow. iOS 27 runtime compatibility is not claimed until the resulting IPA has been tested on a device running iOS 27.
