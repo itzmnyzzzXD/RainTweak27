@@ -162,10 +162,10 @@ jobs:
             exit 1
           fi
           plutil -lint "$APP_PATH/Info.plist"
-          BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")"
+          ACTUAL_BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")"
           APP_VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$APP_PATH/Info.plist" 2>/dev/null || echo unknown)"
-          if [ "$BUNDLE_ID" != "$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")" ]; then
-            echo "Generated IPA bundle ID does not match the requested signing bundle ID."
+          if [ "$BUNDLE_ID" != "$ACTUAL_BUNDLE_ID" ]; then
+            echo "Generated IPA bundle ID $ACTUAL_BUNDLE_ID does not match requested signing bundle ID $BUNDLE_ID."
             exit 1
           fi
           {
@@ -174,7 +174,7 @@ jobs:
             echo "Runner: $ImageOS / $ImageVersion"
             echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
             echo "iOS SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
-            echo "Bundle ID: $BUNDLE_ID"
+            echo "Bundle ID: $ACTUAL_BUNDLE_ID"
             echo "Discord version: $APP_VERSION"
             echo "Tweak package: $DEB_FILE"
             echo "IPA size bytes: $(stat -f%z "${APP_NAME}.ipa")"
