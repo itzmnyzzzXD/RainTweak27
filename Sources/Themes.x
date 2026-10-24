@@ -422,6 +422,12 @@ static void initializeCurrentThemeFromDisk(void) {
 	if (!bundle.loaded) [bundle load];
 
 	%init(KEYBOARD);
-    initializeCurrentThemeFromDisk();
+
+    // Discord's theme classes may not be registered when Logos constructors run.
+    // Defer semantic/raw color swizzling until the app's main run loop is active.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        initializeCurrentThemeFromDisk();
+    });
 
 }
