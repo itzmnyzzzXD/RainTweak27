@@ -147,6 +147,7 @@ jobs:
       - name: Validate build inputs and download Discord IPA
         run: |
           set -euo pipefail
+          echo "::add-mask::$IPA_URL"
           python3 - <<'PY'
           import os, re
           from urllib.parse import urlparse
