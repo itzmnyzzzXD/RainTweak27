@@ -8,6 +8,8 @@
 @interface BunnySettingsViewController () <UIDocumentPickerDelegate>
 - (void)showThemeLibrary;
 - (void)importThemeJSON;
+- (void)exportThemeJSON;
+- (void)exportThemeAtURL:(NSURL *)themeURL;
 - (void)disableActiveTheme;
 - (void)applyThemeAtURL:(NSURL *)themeURL;
 - (void)copyDiagnostics;
@@ -244,7 +246,7 @@ static NSString *safeThemeName(NSString *name) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? 10 : 4;
+    return section == 0 ? 10 : 5;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -269,6 +271,7 @@ static NSString *safeThemeName(NSString *name) {
     ] : @[
         @{@"title" : @"Browse Theme Library", @"icon" : @"paintpalette", @"destructive" : @NO},
         @{@"title" : @"Import Theme JSON", @"icon" : @"square.and.arrow.down", @"destructive" : @NO},
+        @{@"title" : @"Export Theme JSON", @"icon" : @"square.and.arrow.up", @"destructive" : @NO},
         @{@"title" : @"Restore Bundle Backup", @"icon" : @"arrow.uturn.backward.circle", @"destructive" : @NO},
         @{@"title" : @"Copy Diagnostics", @"icon" : @"doc.on.clipboard", @"destructive" : @NO}
     ];
@@ -303,6 +306,9 @@ static NSString *safeThemeName(NSString *name) {
                 [self importThemeJSON];
                 break;
             case 2:
+                [self exportThemeJSON];
+                break;
+            case 3:
                 if (restoreBundleFromBackup()) {
                     UIAlertController *alert = [UIAlertController
                         alertControllerWithTitle:@"Bundle Restored"
@@ -319,7 +325,7 @@ static NSString *safeThemeName(NSString *name) {
                     showErrorAlert(@"No Backup Found", @"There is no saved bundle backup to restore.", nil);
                 }
                 break;
-            case 3:
+            case 4:
                 [self copyDiagnostics];
                 break;
         }
@@ -541,6 +547,79 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
     [self presentViewController:alert animated:YES completion:nil];
 }
 
+
+
+- (void)exportThemeJSON {
+    NSURL *directory = themeDirectoryURL();
+    NSArray<NSURL *> *contents = [[NSFileManager defaultManager]
+        contentsOfDirectoryAtURL:directory
+        includingPropertiesForKeys:nil
+        options:NSDirectoryEnumerationSkipsHiddenFiles
+        error:nil];
+
+    NSMutableArray<NSURL *> *themeURLs = [NSMutableArray array];
+    for (NSURL *url in contents ?: @[]) {
+        if ([[url.pathExtension lowercaseString] isEqualToString:@"json"]) {
+            [themeURLs addObject:url];
+        }
+    }
+    [themeURLs sortUsingComparator:^NSComparisonResult(NSURL *a, NSURL *b) {
+        return [a.lastPathComponent localizedCaseInsensitiveCompare:b.lastPathComponent];
+    }];
+
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"Export Theme"
+                         message:@"Choose a theme to export as a JSON file to Files."
+                  preferredStyle:UIAlertControllerStyleActionSheet];
+
+    for (NSURL *themeURL in themeURLs) {
+        NSString *title = [themeURL.lastPathComponent stringByDeletingPathExtension];
+        NSData *data = [NSData dataWithContentsOfURL:themeURL];
+        NSDictionary *themeObject = data
+            ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil]
+            : nil;
+        if ([themeObject[@"name"] isKindOfClass:[NSString class]] &&
+            [themeObject[@"name"] length] > 0) {
+            title = themeObject[@"name"];
+        }
+        [alert addAction:[UIAlertAction actionWithTitle:title
+                                                  style:UIAlertActionStyleDefault
+                                                handler:^(UIAlertAction *action) {
+            [self exportThemeAtURL:themeURL];
+        }]];
+    }
+
+    if (!themeURLs.count) {
+        UIAlertAction *empty = [UIAlertAction actionWithTitle:@"No themes available"
+                                                        style:UIAlertActionStyleDefault
+                                                      handler:nil];
+        empty.enabled = NO;
+        [alert addAction:empty];
+    }
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+
+    UIPopoverPresentationController *popover = alert.popoverPresentationController;
+    if (popover) {
+        popover.sourceView = self.view;
+        popover.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
+                                        CGRectGetMidY(self.view.bounds), 1, 1);
+        popover.permittedArrowDirections = 0;
+    }
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)exportThemeAtURL:(NSURL *)themeURL {
+    if (![[NSFileManager defaultManager] fileExistsAtPath:themeURL.path]) {
+        showErrorAlert(@"Theme Missing", @"The selected theme file no longer exists.", nil);
+        return;
+    }
+
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForExportingURLs:@[themeURL] asCopy:YES];
+    [self presentViewController:picker animated:YES completion:nil];
+}
 
 - (void)disableActiveTheme {
     NSURL *activeURL = [NSURL fileURLWithPath:CURRENT_THEME];
