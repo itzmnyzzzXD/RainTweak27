@@ -931,18 +931,7 @@ void showSettingsSheet(void) {
                                                       action:@selector(dismiss)];
     settingsVC.navigationItem.rightBarButtonItem = doneButton;
 
-    UIWindow *window = nil;
-    NSSet *scenes    = [[UIApplication sharedApplication] connectedScenes];
-    for (UIScene *scene in scenes) {
-        if (scene.activationState == UISceneActivationStateForegroundActive) {
-            window = ((UIWindowScene *)scene).windows.firstObject;
-            break;
-        }
-    }
-
-    if (!window) {
-        window = [[UIApplication sharedApplication] windows].firstObject;
-    }
+    UIWindow *window = getForegroundKeyWindow();
 
     if (window && window.rootViewController) {
         [window.rootViewController presentViewController:navController animated:YES completion:nil];
