@@ -175,6 +175,7 @@ jobs:
 
       - name: Build Safari Extension
         run: |
+          set -euo pipefail
           cd OpenInDiscord
           xcodebuild build \
             -target "OpenInDiscord Extension" \
@@ -239,7 +240,7 @@ jobs:
             echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
             echo "iOS SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
             echo "Bundle ID: $ACTUAL_BUNDLE_ID"
-            echo "Package version: $(awk -F': ' '$1 == \"Version\" {print $2; exit}' control)"
+            echo "Package version: $(grep '^Version:' control | cut -d ' ' -f 2)"
             echo "Signing: unsigned IPA intended for FrozenApps' Custom IPA signing flow."
           } > build-info.txt
           shasum -a 256 "${APP_NAME}.ipa" > "${APP_NAME}.ipa.sha256"
