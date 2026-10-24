@@ -382,6 +382,12 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
         }]];
     }
 
+    [alert addAction:[UIAlertAction actionWithTitle:@"Disable Active Theme"
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(UIAlertAction *action) {
+        [self disableActiveTheme];
+    }]];
+
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
                                               style:UIAlertActionStyleCancel
                                             handler:nil]];
@@ -392,6 +398,44 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
                                         CGRectGetMidY(self.view.bounds), 1, 1);
         popover.permittedArrowDirections = 0;
     }
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+
+- (void)disableActiveTheme {
+    NSURL *activeURL = [NSURL fileURLWithPath:CURRENT_THEME];
+    NSURL *backupURL = [NSURL fileURLWithPath:[CURRENT_THEME stringByAppendingString:@".backup"]];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:activeURL.path]) {
+        showErrorAlert(@"No Active Theme", @"There is no active theme override to disable.", nil);
+        return;
+    }
+
+    NSError *error = nil;
+    NSData *currentTheme = [NSData dataWithContentsOfURL:activeURL options:0 error:&error];
+    if (!currentTheme || ![currentTheme writeToURL:backupURL options:NSDataWritingAtomic error:&error]) {
+        showErrorAlert(@"Theme Backup Failed",
+                       error.localizedDescription ?: @"The active theme could not be backed up.",
+                       nil);
+        return;
+    }
+    if (![fileManager removeItemAtURL:activeURL error:&error]) {
+        showErrorAlert(@"Theme Disable Failed",
+                       error.localizedDescription ?: @"Could not remove the active theme override.",
+                       nil);
+        return;
+    }
+
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"Theme Disabled"
+                         message:@"The active theme override was removed. Reload Discord to restore its default colors."
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Later"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Reload Now"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *action) { reloadApp(self); }]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
@@ -407,9 +451,8 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
 - (void)applyThemeAtURL:(NSURL *)themeURL {
     NSError *readError = nil;
     NSData *data = [NSData dataWithContentsOfURL:themeURL options:0 error:&readError];
-    NSDictionary *theme = nil;
     NSString *reason = nil;
-    if (!data || !validateThemeData(data, &theme, &reason)) {
+    if (!data || !validateThemeData(data, NULL, &reason)) {
         showErrorAlert(@"Theme Not Applied",
                        reason ?: readError.localizedDescription ?: @"Unable to read the selected theme.",
                        nil);
@@ -425,7 +468,7 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
     if ([fileManager fileExistsAtPath:activeURL.path]) {
         NSError *backupError = nil;
         NSData *oldTheme = [NSData dataWithContentsOfURL:activeURL options:0 error:&backupError];
-        if (oldTheme && ![oldTheme writeToURL:backupURL options:NSDataWritingAtomic error:&backupError]) {
+        if (!oldTheme || ![oldTheme writeToURL:backupURL options:NSDataWritingAtomic error:&backupError]) {
             showErrorAlert(@"Theme Backup Failed",
                            backupError.localizedDescription ?: @"The current theme could not be backed up.",
                            nil);
