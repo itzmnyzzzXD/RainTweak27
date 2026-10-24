@@ -2,7 +2,71 @@
 #import "DeviceModels.h"
 #import "Logger.h"
 #import "Utils.h"
+#import "Themes.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+@interface BunnySettingsViewController () <UIDocumentPickerDelegate>
+@end
+
+static NSURL *themeDirectoryURL(void) {
+    NSURL *directory = [getRainDirectory() URLByAppendingPathComponent:@"themes" isDirectory:YES];
+    [[NSFileManager defaultManager] createDirectoryAtURL:directory
+                             withIntermediateDirectories:YES
+                                              attributes:nil
+                                                   error:nil];
+    return directory;
+}
+
+static BOOL validateThemeData(NSData *data, NSDictionary **themeOut, NSString **reasonOut) {
+    if (!data.length || data.length > 2 * 1024 * 1024) {
+        if (reasonOut) *reasonOut = @"Theme JSON must be between 1 byte and 2 MB.";
+        return NO;
+    }
+
+    NSError *error = nil;
+    id object = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+    if (error || ![object isKindOfClass:[NSDictionary class]]) {
+        if (reasonOut) *reasonOut = @"The file is not a valid JSON theme object.";
+        return NO;
+    }
+
+    NSDictionary *theme = (NSDictionary *)object;
+    NSDictionary *themeData = [theme[@"data"] isKindOfClass:[NSDictionary class]] ? theme[@"data"] : nil;
+    NSNumber *rawSpec = themeData[@"spec"];
+    NSInteger spec = rawSpec ? rawSpec.integerValue : 3;
+    NSDictionary *semantic = nil;
+
+    if (spec == 3) {
+        NSDictionary *main = [theme[@"main"] isKindOfClass:[NSDictionary class]] ? theme[@"main"] : nil;
+        semantic = [main[@"semantic"] isKindOfClass:[NSDictionary class]] ? main[@"semantic"] : nil;
+    } else if (spec == 2) {
+        semantic = [themeData[@"semanticColors"] isKindOfClass:[NSDictionary class]] ? themeData[@"semanticColors"] : nil;
+    } else if (spec == 1) {
+        semantic = [themeData[@"theme_color_map"] isKindOfClass:[NSDictionary class]] ? themeData[@"theme_color_map"] : nil;
+    } else {
+        if (reasonOut) *reasonOut = @"Unsupported theme schema. Supported theme specs are 1, 2, and 3.";
+        return NO;
+    }
+
+    if (!semantic.count) {
+        if (reasonOut) *reasonOut = @"The JSON does not contain a supported semantic color map.";
+        return NO;
+    }
+
+    if (themeOut) *themeOut = theme;
+    return YES;
+}
+
+static NSString *safeThemeName(NSString *name) {
+    NSString *base = [[name stringByDeletingPathExtension] stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!base.length) base = @"Imported Theme";
+    NSCharacterSet *invalid = [[NSCharacterSet characterSetWithCharactersInString:
+        @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_ ."] invertedSet];
+    base = [[base componentsSeparatedByCharactersInSet:invalid] componentsJoinedByString:@"_"];
+    base = [base stringByReplacingOccurrencesOfString:@" " withString:@"-"];
+    return base.length ? base : @"Imported-Theme";
+}
 
 @implementation BunnySettingsViewController
 
@@ -34,11 +98,22 @@
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 1;
+    return 2;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    return section == 0 ? @"Recovery & Maintenance" : @"Appearance, Tools & Diagnostics";
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    if (section == 0) {
+        return @"Original recovery actions are preserved. Destructive actions ask for confirmation.";
+    }
+    return @"Theme JSON is validated before import. A backup is kept before replacing the active theme.";
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return 10;
+    return section == 0 ? 10 : 4;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -49,27 +124,22 @@
                                       reuseIdentifier:@"Cell"];
     }
 
-    NSArray *options = @[
-        @{@"title" : @"Toggle Safe Mode", @"icon" : @"shield", @"destructive" : @NO}, @{
-            @"title" : @"Refetch Bundle",
-            @"icon" : @"arrow.triangle.2.circlepath",
-            @"destructive" : @NO
-        },
-        @{
-            @"title" : @"Switch Bundle Version",
-            @"icon" : @"arrow.triangle.2.circlepath.circle",
-            @"destructive" : @NO
-        },
+    NSArray *options = indexPath.section == 0 ? @[
+        @{@"title" : @"Toggle Safe Mode", @"icon" : @"shield", @"destructive" : @NO},
+        @{@"title" : @"Refetch Bundle", @"icon" : @"arrow.triangle.2.circlepath", @"destructive" : @NO},
+        @{@"title" : @"Switch Bundle Version", @"icon" : @"arrow.triangle.2.circlepath.circle", @"destructive" : @NO},
         @{@"title" : @"Load Custom Bundle", @"icon" : @"link.badge.plus", @"destructive" : @NO},
         @{@"title" : @"Reset Bundle", @"icon" : @"arrow.counterclockwise", @"destructive" : @YES},
         @{@"title" : @"Delete All Plugins", @"icon" : @"trash", @"destructive" : @YES},
         @{@"title" : @"Delete All Themes", @"icon" : @"trash", @"destructive" : @YES},
         @{@"title" : @"Delete All Mod Data", @"icon" : @"trash.fill", @"destructive" : @YES},
-        @{@"title" : @"Open App Folder", @"icon" : @"folder", @"destructive" : @NO}, @{
-            @"title" : @"Open GitHub Issue",
-            @"icon" : @"exclamationmark.bubble",
-            @"destructive" : @NO
-        }
+        @{@"title" : @"Open App Folder", @"icon" : @"folder", @"destructive" : @NO},
+        @{@"title" : @"Open GitHub Issue", @"icon" : @"exclamationmark.bubble", @"destructive" : @NO}
+    ] : @[
+        @{@"title" : @"Browse Theme Library", @"icon" : @"paintpalette", @"destructive" : @NO},
+        @{@"title" : @"Import Theme JSON", @"icon" : @"square.and.arrow.down", @"destructive" : @NO},
+        @{@"title" : @"Restore Bundle Backup", @"icon" : @"arrow.uturn.backward.circle", @"destructive" : @NO},
+        @{@"title" : @"Copy Diagnostics", @"icon" : @"doc.on.clipboard", @"destructive" : @NO}
     ];
 
     NSDictionary *option = options[indexPath.row];
@@ -83,7 +153,7 @@
     cell.imageView.tintColor =
         [option[@"destructive"] boolValue] ? UIColor.systemRedColor : UIColor.systemBlueColor;
 
-    if (indexPath.row == 0) {
+    if (indexPath.section == 0 && indexPath.row == 0) {
         cell.textLabel.text = isSafeModeEnabled() ? @"Disable Safe Mode" : @"Enable Safe Mode";
     }
 
@@ -92,6 +162,38 @@
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
+
+    if (indexPath.section == 1) {
+        switch (indexPath.row) {
+            case 0:
+                [self showThemeLibrary];
+                break;
+            case 1:
+                [self importThemeJSON];
+                break;
+            case 2:
+                if (restoreBundleFromBackup()) {
+                    UIAlertController *alert = [UIAlertController
+                        alertControllerWithTitle:@"Bundle Restored"
+                                         message:@"The previous bundle was restored. Reload Discord to use it."
+                                  preferredStyle:UIAlertControllerStyleAlert];
+                    [alert addAction:[UIAlertAction actionWithTitle:@"Later"
+                                                              style:UIAlertActionStyleCancel
+                                                            handler:nil]];
+                    [alert addAction:[UIAlertAction actionWithTitle:@"Reload Now"
+                                                              style:UIAlertActionStyleDefault
+                                                            handler:^(UIAlertAction *action) { reloadApp(self); }]];
+                    [self presentViewController:alert animated:YES completion:nil];
+                } else {
+                    showErrorAlert(@"No Backup Found", @"There is no saved bundle backup to restore.", nil);
+                }
+                break;
+            case 3:
+                [self copyDiagnostics];
+                break;
+        }
+        return;
+    }
 
     if (indexPath.row == 0) {
         toggleSafeMode();
@@ -231,6 +333,223 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
 
     NSURL *url          = [NSURL URLWithString:urlString];
     [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+}
+
+
+- (void)showThemeLibrary {
+    NSURL *directory = themeDirectoryURL();
+    NSError *listingError = nil;
+    NSArray<NSURL *> *contents = [[NSFileManager defaultManager]
+        contentsOfDirectoryAtURL:directory
+        includingPropertiesForKeys:nil
+        options:NSDirectoryEnumerationSkipsHiddenFiles
+        error:&listingError];
+
+    NSMutableArray<NSURL *> *themeURLs = [NSMutableArray array];
+    for (NSURL *url in contents ?: @[]) {
+        if ([[url.pathExtension lowercaseString] isEqualToString:@"json"]) {
+            [themeURLs addObject:url];
+        }
+    }
+    [themeURLs sortUsingComparator:^NSComparisonResult(NSURL *a, NSURL *b) {
+        return [a.lastPathComponent localizedCaseInsensitiveCompare:b.lastPathComponent];
+    }];
+
+    NSString *message = [NSString stringWithFormat:
+        @"%lu JSON theme(s) found in Documents/rain/themes. Choose one to activate it.",
+        (unsigned long)themeURLs.count];
+    if (listingError) {
+        message = [message stringByAppendingFormat:@"\n\nFolder error: %@", listingError.localizedDescription];
+    }
+
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Theme Library"
+                                                                   message:message
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    if (!themeURLs.count) {
+        UIAlertAction *empty = [UIAlertAction actionWithTitle:@"No themes imported yet"
+                                                        style:UIAlertActionStyleDefault
+                                                      handler:nil];
+        empty.enabled = NO;
+        [alert addAction:empty];
+    }
+
+    for (NSURL *themeURL in themeURLs) {
+        NSString *title = [themeURL.lastPathComponent stringByDeletingPathExtension];
+        [alert addAction:[UIAlertAction actionWithTitle:title
+                                                  style:UIAlertActionStyleDefault
+                                                handler:^(UIAlertAction *action) {
+            [self applyThemeAtURL:themeURL];
+        }]];
+    }
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    UIPopoverPresentationController *popover = alert.popoverPresentationController;
+    if (popover) {
+        popover.sourceView = self.view;
+        popover.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
+                                        CGRectGetMidY(self.view.bounds), 1, 1);
+        popover.permittedArrowDirections = 0;
+    }
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)importThemeJSON {
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeJSON, UTTypePlainText]
+                                                                    asCopy:YES];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)applyThemeAtURL:(NSURL *)themeURL {
+    NSError *readError = nil;
+    NSData *data = [NSData dataWithContentsOfURL:themeURL options:0 error:&readError];
+    NSDictionary *theme = nil;
+    NSString *reason = nil;
+    if (!data || !validateThemeData(data, &theme, &reason)) {
+        showErrorAlert(@"Theme Not Applied",
+                       reason ?: readError.localizedDescription ?: @"Unable to read the selected theme.",
+                       nil);
+        return;
+    }
+
+    NSURL *activeURL = [NSURL fileURLWithPath:CURRENT_THEME];
+    NSURL *backupURL = [NSURL fileURLWithPath:[CURRENT_THEME stringByAppendingString:@".backup"]];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    [fileManager createDirectoryAtURL:[activeURL URLByDeletingLastPathComponent]
+          withIntermediateDirectories:YES attributes:nil error:nil];
+
+    if ([fileManager fileExistsAtPath:activeURL.path]) {
+        NSError *backupError = nil;
+        NSData *oldTheme = [NSData dataWithContentsOfURL:activeURL options:0 error:&backupError];
+        if (oldTheme && ![oldTheme writeToURL:backupURL options:NSDataWritingAtomic error:&backupError]) {
+            showErrorAlert(@"Theme Backup Failed",
+                           backupError.localizedDescription ?: @"The current theme could not be backed up.",
+                           nil);
+            return;
+        }
+    }
+
+    NSError *writeError = nil;
+    if (![data writeToURL:activeURL options:NSDataWritingAtomic error:&writeError]) {
+        showErrorAlert(@"Theme Apply Failed",
+                       writeError.localizedDescription ?: @"Could not save the active theme.",
+                       nil);
+        return;
+    }
+
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"Theme Saved"
+                         message:[NSString stringWithFormat:@"%@ is now the active theme. Reload Discord to apply all colors.",
+                                                            themeURL.lastPathComponent]
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Later"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Reload Now"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *action) { reloadApp(self); }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *sourceURL = urls.firstObject;
+    if (!sourceURL) return;
+
+    if (![[sourceURL.pathExtension lowercaseString] isEqualToString:@"json"]) {
+        showErrorAlert(@"Unsupported File", @"Choose a .json theme file.", nil);
+        return;
+    }
+
+    BOOL didAccess = [sourceURL startAccessingSecurityScopedResource];
+    NSError *readError = nil;
+    NSData *data = [NSData dataWithContentsOfURL:sourceURL options:0 error:&readError];
+    if (didAccess) [sourceURL stopAccessingSecurityScopedResource];
+
+    NSDictionary *theme = nil;
+    NSString *reason = nil;
+    if (!data || !validateThemeData(data, &theme, &reason)) {
+        showErrorAlert(@"Invalid Theme",
+                       reason ?: readError.localizedDescription ?: @"The file could not be read.",
+                       nil);
+        return;
+    }
+
+    NSString *baseName = safeThemeName(sourceURL.lastPathComponent);
+    NSString *suffix = [[[NSUUID UUID] UUIDString] substringToIndex:8];
+    NSString *fileName = [NSString stringWithFormat:@"%@-%@.json", baseName, suffix];
+    NSURL *destinationURL = [themeDirectoryURL() URLByAppendingPathComponent:fileName];
+    NSError *writeError = nil;
+    if (![data writeToURL:destinationURL options:NSDataWritingAtomic error:&writeError]) {
+        showErrorAlert(@"Import Failed", writeError.localizedDescription ?: @"Could not save the theme.", nil);
+        return;
+    }
+
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"Theme Imported"
+                         message:@"The theme was validated and saved to your local theme library."
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Later"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Activate Now"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *action) {
+        [self applyThemeAtURL:destinationURL];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)copyDiagnostics {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSURL *rainDirectory = getRainDirectory();
+    NSURL *bundleURL = [rainDirectory URLByAppendingPathComponent:@"bundle.js"];
+    NSURL *pluginsURL = [rainDirectory URLByAppendingPathComponent:@"plugins" isDirectory:YES];
+    NSURL *themesURL = themeDirectoryURL();
+    NSURL *currentThemeURL = [NSURL fileURLWithPath:CURRENT_THEME];
+
+    NSArray *plugins = [fileManager contentsOfDirectoryAtURL:pluginsURL
+                                  includingPropertiesForKeys:nil
+                                                     options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                       error:nil];
+    NSArray *themes = [fileManager contentsOfDirectoryAtURL:themesURL
+                                 includingPropertiesForKeys:nil
+                                                    options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                      error:nil];
+    NSDictionary *bundleAttributes = [fileManager attributesOfItemAtPath:bundleURL.path error:nil];
+    NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"Unknown";
+    NSString *buildNumber = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"Unknown";
+
+    NSString *diagnostics = [NSString stringWithFormat:
+        @"RainTweak Diagnostics\n"
+         "Tweak version: %@\n"
+         "Discord version: %@ (%@)\n"
+         "iOS: %@\n"
+         "Device: %@\n"
+         "Jailbroken: %@\n"
+         "Safe mode: %@\n"
+         "Bundle cache present: %@\n"
+         "Bundle cache bytes: %@\n"
+         "Imported plugins: %lu\n"
+         "Imported themes: %lu\n"
+         "Active theme file present: %@\n",
+        PACKAGE_VERSION, appVersion, buildNumber, UIDevice.currentDevice.systemVersion,
+        DEVICE_MODELS[getDeviceIdentifier()] ?: getDeviceIdentifier(),
+        isJailbroken ? @"Yes" : @"No",
+        isSafeModeEnabled() ? @"Enabled" : @"Disabled",
+        [fileManager fileExistsAtPath:bundleURL.path] ? @"Yes" : @"No",
+        bundleAttributes[NSFileSize] ?: @0,
+        (unsigned long)plugins.count, (unsigned long)themes.count,
+        [fileManager fileExistsAtPath:currentThemeURL.path] ? @"Yes" : @"No"];
+
+    UIPasteboard.generalPasteboard.string = diagnostics;
+    showErrorAlert(@"Diagnostics Copied",
+                   @"The diagnostic summary is on your clipboard. Review it before sharing.",
+                   nil);
 }
 
 - (void)loadCustomBundle {
