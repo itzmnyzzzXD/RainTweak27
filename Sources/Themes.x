@@ -364,21 +364,21 @@ BOOL isThemeLight(UIColor *color) {
 %end
 
 void initializeThemeColors(NSDictionary *semanticColors, NSDictionary *rawColors) {
-    if (![semanticColors isKindOfClass:[NSDictionary class]] ||
-        ![rawColors isKindOfClass:[NSDictionary class]]) {
-        BunnyLog(@"Skipping theme initialization: semantic/raw color maps are missing.");
+    BOOL hasSemantic = [semanticColors isKindOfClass:[NSDictionary class]];
+    BOOL hasRaw = [rawColors isKindOfClass:[NSDictionary class]];
+    if (!hasSemantic && !hasRaw) {
+        BunnyLog(@"Skipping theme initialization: no compatible color maps were found.");
         return;
     }
 
+    gSemanticColors = hasSemantic ? [semanticColors copy] : @{};
+    gRawColors = hasRaw ? [rawColors copy] : @{};
     BunnyLog(@"Initializing theme (%lu semantic colors, %lu raw colors)",
-             (unsigned long)semanticColors.count, (unsigned long)rawColors.count);
+             (unsigned long)gSemanticColors.count, (unsigned long)gRawColors.count);
 
-    gSemanticColors = [semanticColors copy];
-    gRawColors      = [rawColors copy];
-    loggedColors    = [NSMutableSet new];
-
-    swizzleDCDThemeColorMethods();
-    swizzleRawColorMethods();
+    loggedColors = [NSMutableSet new];
+    if (gSemanticColors.count) swizzleDCDThemeColorMethods();
+    if (gRawColors.count) swizzleRawColorMethods();
 }
 
 static void initializeCurrentThemeFromDisk(void) {
@@ -407,13 +407,13 @@ static void initializeCurrentThemeFromDisk(void) {
         raw = [data[@"rawColors"] isKindOfClass:[NSDictionary class]] ? data[@"rawColors"] : nil;
     }
 
-    if (!semantic.count || !raw.count) {
+    if (!semantic.count && !raw.count) {
         BunnyLog(@"Active theme has no compatible semantic/raw maps (spec %@).",
                  rawSpec ?: @3);
         return;
     }
 
-    initializeThemeColors(semantic, raw);
+    initializeThemeColors(semantic ?: @{}, raw ?: @{});
 }
 
 %ctor {
