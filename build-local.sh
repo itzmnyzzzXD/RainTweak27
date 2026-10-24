@@ -104,7 +104,14 @@ VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
 DEB_FILE="packages/${PACKAGE}_${VERSION}_iphoneos-arm64.deb"
 
 print_status "Injecting tweak..."
-cyan -duwsgq -i $IPA_FILE -o "$NAME.ipa" -l patch.plist -f "$DEB_FILE" $SAFARI_APPEX
+INJECTION_FILES=("$DEB_FILE")
+if [ -n "${SAFARI_APPEX:-}" ]; then
+    INJECTION_FILES+=("$SAFARI_APPEX")
+fi
+
+# Keep this output unsigned for the downstream on-device signer.
+# -s/--fakesign is for AppSync/TrollStore, not FrozenApps' normal signing flow.
+cyan -duwgq -i "$IPA_FILE" -o "$NAME.ipa" -l patch.plist -f "${INJECTION_FILES[@]}"
 
 if [ $? -ne 0 ]; then
     print_error "Failed to inject tweak"
