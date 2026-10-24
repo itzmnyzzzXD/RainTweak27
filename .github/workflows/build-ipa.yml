@@ -1,0 +1,178 @@
+name: Build IPA Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: "Direct HTTPS URL to a decrypted Discord IPA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-ipa:
+    name: Build and package RainTweak IPA
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      IPA_URL: ${{ inputs.ipa_url }}
+    steps:
+      - name: Checkout RainTweak27
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Verify Xcode 27 and validate input URL
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          value = os.environ.get("IPA_URL", "").strip()
+          parsed = urlparse(value)
+          if parsed.scheme != "https" or not parsed.hostname:
+              raise SystemExit("ipa_url must be a direct HTTPS URL.")
+          if parsed.username or parsed.password:
+              raise SystemExit("Do not put credentials in the IPA URL. Use a public or time-limited download URL.")
+          PY
+
+      - name: Download input Discord IPA
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 900 \
+            "$IPA_URL" --output discord.ipa
+          test -s discord.ipa
+          unzip -tq discord.ipa
+          echo "Input IPA downloaded and ZIP integrity checked."
+
+      - name: Resolve Theos cache key
+        run: |
+          set -euo pipefail
+          THEOS_HEAD="$(git ls-remote https://github.com/theos/theos HEAD | cut -f1)"
+          SDK_HEAD="$(git ls-remote https://github.com/theos/sdks HEAD | cut -f1)"
+          echo "THEOS_CACHE_KEY=${THEOS_HEAD}-${SDK_HEAD}" >> "$GITHUB_ENV"
+
+      - name: Restore Theos cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/theos
+          key: ${{ runner.os }}-theos-ios27-${{ env.THEOS_CACHE_KEY }}
+
+      - name: Prepare Theos
+        uses: Randomblock1/theos-action@v1
+
+      - name: Install build utilities
+        run: |
+          brew install make xcbeautify
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: Build rootless tweak package
+        run: |
+          set -euo pipefail
+          make package
+          DEB_FILE="$(find packages -name '*iphoneos-arm64.deb' -print -quit)"
+          if [ -z "$DEB_FILE" ]; then
+            echo "No rootless arm64 package was produced."
+            find packages -maxdepth 3 -type f -print || true
+            exit 1
+          fi
+          echo "DEB_FILE=$DEB_FILE" >> "$GITHUB_ENV"
+          echo "Built package: $DEB_FILE"
+
+      - name: Checkout OpenInDiscord extension
+        uses: actions/checkout@v4
+        with:
+          repository: castdrian/OpenInDiscord
+          path: OpenInDiscord
+
+      - name: Build OpenInDiscord extension with Xcode 27
+        run: |
+          set -euo pipefail
+          cd OpenInDiscord
+          xcodebuild build \
+            -target "OpenInDiscord Extension" \
+            -configuration Release \
+            -sdk iphoneos \
+            CONFIGURATION_BUILD_DIR="build" \
+            PRODUCT_NAME="OpenInDiscord" \
+            PRODUCT_BUNDLE_IDENTIFIER="com.hammerandchisel.discord.OpenInDiscord" \
+            PRODUCT_MODULE_NAME="OpenInDiscordExt" \
+            SKIP_INSTALL=NO \
+            DEVELOPMENT_TEAM="" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO | xcbeautify
+          test -d build/OpenInDiscord.appex
+
+      - name: Install IPA injection tool
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install --force-reinstall \
+            https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow lief
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Inject RainTweak and extension
+        run: |
+          set -euo pipefail
+          APP_NAME="$(awk -F': ' '$1 == "Name" {print $2; exit}' control)"
+          if [ -z "$APP_NAME" ]; then
+            echo "Could not read the package Name from control."
+            exit 1
+          fi
+          cyan -uwsgq -i discord.ipa -o "${APP_NAME}.ipa" -l patch.plist \
+            -f "$DEB_FILE" OpenInDiscord/build/OpenInDiscord.appex
+          test -s "${APP_NAME}.ipa"
+          echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
+
+      - name: Validate generated IPA
+        run: |
+          set -euo pipefail
+          unzip -tq "${APP_NAME}.ipa"
+          rm -rf ipa-validation
+          mkdir ipa-validation
+          ditto -x -k "${APP_NAME}.ipa" ipa-validation
+          APP_PATH="$(find ipa-validation/Payload -type d -name '*.app' -print -quit)"
+          if [ -z "$APP_PATH" ] || [ ! -f "$APP_PATH/Info.plist" ]; then
+            echo "IPA does not contain a valid Payload/*.app/Info.plist."
+            exit 1
+          fi
+          plutil -lint "$APP_PATH/Info.plist"
+          BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")"
+          APP_VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$APP_PATH/Info.plist" 2>/dev/null || echo unknown)"
+          {
+            echo "RainTweak27 IPA build"
+            echo "Commit: $GITHUB_SHA"
+            echo "Runner: $ImageOS / $ImageVersion"
+            echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
+            echo "iOS SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
+            echo "Bundle ID: $BUNDLE_ID"
+            echo "Discord version: $APP_VERSION"
+            echo "Tweak package: $DEB_FILE"
+            echo "IPA size bytes: $(stat -f%z "${APP_NAME}.ipa")"
+            echo "Note: successful archive validation is not proof of runtime iOS 27 compatibility."
+          } > build-info.txt
+          cat build-info.txt
+
+      - name: Upload RainTweak IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RainTweak27-IPA
+          path: |
+            ${{ env.APP_NAME }}.ipa
+            ${{ env.DEB_FILE }}
+            build-info.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
