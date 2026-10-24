@@ -74,9 +74,9 @@ jobs:
               echo "::error::No latest release with a source IPA could be found. Attach an authorized, decrypted Discord IPA named Discord.ipa to a release, or provide the optional URL."
               exit 1
             fi
-            ASSET_URL="$(printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=[x for x in d.get("assets",[]) if x.get("name","").lower() in ("discord.ipa","discord-decrypted.ipa")]; print(a[0]["url"] if a else "")')"
+            ASSET_URL="$(printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=d.get("assets",[]); a.sort(key=lambda x: (x.get("name","").lower() not in ("discord.ipa","discord-decrypted.ipa"), x.get("name","").lower())); a=[x for x in a if x.get("name","").lower().endswith(".ipa")]; print(a[0]["url"] if a else "")')"
             if [ -z "$ASSET_URL" ]; then
-              echo "::error::The latest release has no Discord.ipa or Discord-decrypted.ipa asset. Attach an authorized, decrypted Discord IPA with one of those names, or provide the optional URL."
+              echo "::error::The latest release has no .ipa asset. Attach an authorized, decrypted Discord IPA to the latest release (any .ipa filename is accepted), or provide the optional URL."
               exit 1
             fi
             gh api "$ASSET_URL" -H "Accept: application/octet-stream" > discord.ipa
