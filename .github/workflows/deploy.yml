@@ -18,6 +18,11 @@ on:
         description: "TestFlight build"
         required: true
         type: boolean
+      bundle_id:
+        default: "com.itzmnyzzxd.discord"
+        description: "Unique bundle ID to use with your own signing profile"
+        required: true
+        type: string
   workflow_call:
     inputs:
       ipa_url:
@@ -33,13 +38,18 @@ on:
       caller_workflow:
         required: false
         type: string
+      bundle_id:
+        required: false
+        type: string
+        default: "com.itzmnyzzxd.discord"
 
 env:
   GH_TOKEN: ${{ github.token }}
+  BUNDLE_ID: ${{ github.event.inputs.bundle_id || inputs.bundle_id || 'com.itzmnyzzxd.discord' }}
 
 jobs:
   build-tweak:
-    runs-on: macos-15
+    runs-on: xcode-27
 
     env:
       DEB_DOWNLOADED: false
@@ -119,8 +129,10 @@ jobs:
 
   build-ipa:
     if: inputs.caller_workflow != 'ci'
-    runs-on: macos-15
+    runs-on: xcode-27
     needs: build-tweak
+    env:
+      IPA_URL: ${{ github.event.inputs.ipa_url || inputs.ipa_url }}
 
     steps:
       - name: Checkout code
@@ -131,9 +143,24 @@ jobs:
         with:
           merge-multiple: true
 
-      - name: Download Discord IPA
+      - name: Validate build inputs and download Discord IPA
         run: |
-          curl -L -o discord.ipa ${{ github.event.inputs.ipa_url || inputs.ipa_url }}
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlparse
+          url = urlparse(os.environ.get("IPA_URL", "").strip())
+          if url.scheme != "https" or not url.hostname or url.username or url.password:
+              raise SystemExit("ipa_url must be a direct HTTPS download URL without embedded credentials.")
+          bundle_id = os.environ.get("BUNDLE_ID", "").strip()
+          if not re.fullmatch(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", bundle_id):
+              raise SystemExit("bundle_id must be a dotted identifier such as com.example.discord.")
+          print(f"Using signing bundle ID: {bundle_id}")
+          PY
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 900 \
+            "$IPA_URL" --output discord.ipa
+          test -s discord.ipa
+          unzip -tq discord.ipa
 
       - name: Clone OpenInDiscord
         uses: actions/checkout@v4
@@ -171,15 +198,53 @@ jobs:
       - name: Install cyan
         run: pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
 
-      - name: Inject tweak and extension
+      - name: Inject unsigned IPA for FrozenApps signing
         run: |
-          cyan -uwsgq -i discord.ipa -o ${{ env.APP_NAME }}.ipa -f ${{ env.ROOTLESS_DEB_FILE_NAME }} OpenInDiscord/build/OpenInDiscord.appex
+          set -euo pipefail
+          # Deliberately omit -s/--fakesign: FrozenApps signs this IPA using the
+          # user's own Apple developer session before installing it on-device.
+          cyan -duwgq -i discord.ipa -o "${APP_NAME}.ipa" -b "$BUNDLE_ID" \
+            -l patch.plist -f "$ROOTLESS_DEB_FILE_NAME" OpenInDiscord/build/OpenInDiscord.appex
+          test -s "${APP_NAME}.ipa"
+          unzip -tq "${APP_NAME}.ipa"
+          mkdir -p ipa-validation
+          ditto -x -k "${APP_NAME}.ipa" ipa-validation
+          APP_PATH="$(find ipa-validation/Payload -type d -name '*.app' -print -quit)"
+          if [ -z "$APP_PATH" ] || [ ! -f "$APP_PATH/Info.plist" ]; then
+            echo "IPA does not contain a Payload/*.app/Info.plist."
+            exit 1
+          fi
+          plutil -lint "$APP_PATH/Info.plist"
+          ACTUAL_BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")"
+          if [ "$ACTUAL_BUNDLE_ID" != "$BUNDLE_ID" ]; then
+            echo "Expected bundle ID $BUNDLE_ID, found $ACTUAL_BUNDLE_ID."
+            exit 1
+          fi
+          {
+            echo "RainTweak27 IPA build"
+            echo "Commit: $GITHUB_SHA"
+            echo "Runner: $ImageOS / $ImageVersion"
+            echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
+            echo "iOS SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
+            echo "Bundle ID: $ACTUAL_BUNDLE_ID"
+            echo "Package version: $(awk -F': ' '$1 == \"Version\" {print $2; exit}' control)"
+            echo "Signing: unsigned IPA intended for FrozenApps' Custom IPA signing flow."
+          } > build-info.txt
+          shasum -a 256 "${APP_NAME}.ipa" > "${APP_NAME}.ipa.sha256"
+          cat build-info.txt
+          cat "${APP_NAME}.ipa.sha256"
 
-      - name: Upload ipa as artifact
+      - name: Upload IPA for FrozenApps
         uses: actions/upload-artifact@v4
         with:
-          name: ipa
-          path: ${{ env.APP_NAME }}.ipa
+          name: RainTweak27-IPA-for-FrozenApps
+          path: |
+            ${{ env.APP_NAME }}.ipa
+            ${{ env.APP_NAME }}.ipa.sha256
+            build-info.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
 
   release-app:
     if: |
@@ -231,6 +296,7 @@ jobs:
           files: |
             ${{ env.ROOTLESS_DEB_FILE_NAME }}
             ${{ env.APP_NAME }}.ipa
+            ${{ env.APP_NAME }}.ipa.sha256
           generate_release_notes: true
           prerelease: ${{ env.IS_PRERELEASE }}
           fail_on_unmatched_files: true
