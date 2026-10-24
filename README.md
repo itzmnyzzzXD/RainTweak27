@@ -42,11 +42,11 @@ To resolve the fixable issue, you need to match the app's bundle ID with your pr
 This fork includes a GitHub Actions workflow that builds the tweak, injects it into a supplied decrypted Discord IPA, validates the output archive, and uploads `RainTweak.ipa` as a downloadable workflow artifact.
 
 1. Open **Actions → Build IPA Artifact → Run workflow**.
-2. Paste a direct **HTTPS download URL for a decrypted Discord IPA** into `ipa_url`.
-3. Run the workflow and wait for the build job to finish.
-4. Open that run and download the **RainTweak27-IPA-for-FrozenApps** artifact ZIP. Extract `RainTweak.ipa` from it.
+2. The `ipa_url` input is optional. Leave it blank when the latest RainTweak27 GitHub Release contains your authorized, decrypted Discord IPA; the workflow prefers `Discord.ipa` or `Discord-decrypted.ipa`. Otherwise, provide its direct HTTPS download URL.
+3. Keep the bundle ID aligned with the App ID your signing profile supports, then run the workflow.
+4. Open that run and download the **RainTweak27-IPA-for-FrozenApps** artifact ZIP. Extract `RainTweak.ipa` from it. If the build fails, check the failed step and download the **RainTweak27-build-diagnostics** artifact when available.
 
-The workflow uses GitHub's `xcode-27` runner and doesn't require Xcode to be installed on your own device. It does still require a compatible input IPA; the workflow cannot safely obtain or decrypt Discord's proprietary app package automatically. The resulting IPA is unsigned or has signing removed by the injection tooling, so install it through your usual sideloading/signing process.
+The workflow uses GitHub's `xcode-27` runner, targets iOS 15.0 or later, and doesn't require Xcode to be installed on your own device. It does still require a compatible input IPA; the workflow cannot safely obtain or decrypt Discord's proprietary app package automatically. The resulting IPA is unsigned or has signing removed by the injection tooling, so install it through your usual sideloading/signing process.
 
 The workflow preserves the original package build and app-injection flow. iOS 27 runtime compatibility is not claimed until the resulting IPA has been tested on a device running iOS 27.
 
