@@ -50,7 +50,7 @@ jobs:
           if parsed.username or parsed.password:
               raise SystemExit("Do not put credentials in the IPA URL. Use a public or time-limited download URL.")
           bundle_id = os.environ.get("BUNDLE_ID", "").strip()
-          if not re.fullmatch(r"[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+", bundle_id):
+          if not re.fullmatch(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", bundle_id):
               raise SystemExit("bundle_id must be a dotted identifier (example: com.example.discord).")
           print(f"Using signing bundle ID: {bundle_id}")
           PY
