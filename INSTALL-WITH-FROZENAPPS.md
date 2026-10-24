@@ -5,8 +5,8 @@ RainTweak27 builds a modified Discord IPA. The IPA produced by this workflow is 
 ## Build the IPA
 
 1. Open [Actions → Build IPA Artifact](https://github.com/itzmnyzzzXD/RainTweak27/actions/workflows/build-ipa.yml).
-2. Choose **Run workflow**, enter a direct HTTPS URL for a decrypted Discord IPA that you are permitted to use, and leave the bundle ID as `com.itzmnyzzxd.discord` unless your signing setup requires a different identifier. It must match the App ID your signing account provisions.
-3. Let the build finish. Download the **RainTweak27-IPA-for-FrozenApps** artifact.
+2. Choose **Run workflow**. The `ipa_url` field is optional: leave it blank if the latest RainTweak27 GitHub Release includes your authorized, decrypted source IPA named `Discord.ipa` or `Discord-decrypted.ipa`; otherwise provide a direct HTTPS download URL for that IPA. Keep the bundle ID as `com.itzmnyzzxd.discord` unless your signing setup requires a different identifier. It must match the App ID your signing account provisions.
+3. Let the build finish. Download the **RainTweak27-IPA-for-FrozenApps** artifact. If it fails, inspect the first failed step and download the **RainTweak27-build-diagnostics** artifact if one was produced.
 4. On your iPad, open the downloaded artifact ZIP in Files and extract it. Select the `.ipa` file inside; do not select the ZIP, `.deb`, checksum, or build-info text file.
 
 ## Import, sign, and install on iPad
