@@ -4,7 +4,7 @@ Tweak to inject Rain into discord
 
 ## Installation
 
-The latest builds can be found in the [Releases](https://codeberg.org/raincord/RainTweak/releases) tab.
+For this fork, build the IPA through [GitHub Actions → Build IPA Artifact](https://github.com/itzmnyzzzXD/RainTweak27/actions/workflows/build-ipa.yml). The upstream project’s releases remain available at [RainTweak releases](https://codeberg.org/raincord/RainTweak/releases).
 **iOS 27 support is experimental.** The fork now builds against the latest iOS SDK available on its CI runner, but runtime compatibility still needs device testing.
 
 <details>
