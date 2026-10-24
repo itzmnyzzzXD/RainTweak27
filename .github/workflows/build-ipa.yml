@@ -7,6 +7,11 @@ on:
         description: "Direct HTTPS URL to a decrypted Discord IPA"
         required: true
         type: string
+      bundle_id:
+        description: "Unique bundle ID to use for your own signing profile"
+        required: true
+        default: "com.itzmnyzzxd.discord"
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +27,7 @@ jobs:
     timeout-minutes: 60
     env:
       IPA_URL: ${{ inputs.ipa_url }}
+      BUNDLE_ID: ${{ inputs.bundle_id }}
     steps:
       - name: Checkout RainTweak27
         uses: actions/checkout@v4
@@ -35,7 +41,7 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           python3 - <<'PY'
-          import os
+          import os, re
           from urllib.parse import urlparse
           value = os.environ.get("IPA_URL", "").strip()
           parsed = urlparse(value)
@@ -43,6 +49,10 @@ jobs:
               raise SystemExit("ipa_url must be a direct HTTPS URL.")
           if parsed.username or parsed.password:
               raise SystemExit("Do not put credentials in the IPA URL. Use a public or time-limited download URL.")
+          bundle_id = os.environ.get("BUNDLE_ID", "").strip()
+          if not re.fullmatch(r"[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+", bundle_id):
+              raise SystemExit("bundle_id must be a dotted identifier (example: com.example.discord).")
+          print(f"Using signing bundle ID: {bundle_id}")
           PY
 
       - name: Download input Discord IPA
@@ -134,8 +144,8 @@ jobs:
           fi
           # Do not use -s/--fakesign here. FrozenApps signs this IPA using the
           # user's own Apple developer session before installing it on-device.
-          cyan -duwgq -i discord.ipa -o "${APP_NAME}.ipa" -l patch.plist \
-            -f "$DEB_FILE" OpenInDiscord/build/OpenInDiscord.appex
+          cyan -duwgq -i discord.ipa -o "${APP_NAME}.ipa" -b "$BUNDLE_ID" \
+            -l patch.plist -f "$DEB_FILE" OpenInDiscord/build/OpenInDiscord.appex
           test -s "${APP_NAME}.ipa"
           echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
 
@@ -154,6 +164,10 @@ jobs:
           plutil -lint "$APP_PATH/Info.plist"
           BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")"
           APP_VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$APP_PATH/Info.plist" 2>/dev/null || echo unknown)"
+          if [ "$BUNDLE_ID" != "$(plutil -extract CFBundleIdentifier raw -o - "$APP_PATH/Info.plist")" ]; then
+            echo "Generated IPA bundle ID does not match the requested signing bundle ID."
+            exit 1
+          fi
           {
             echo "RainTweak27 IPA build"
             echo "Commit: $GITHUB_SHA"
