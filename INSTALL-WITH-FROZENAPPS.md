@@ -17,7 +17,9 @@ RainTweak27 builds a modified Discord IPA. The IPA produced by this workflow is 
 4. Switch to **Signer**, choose the **Custom IPA** source, and run the install flow.
 5. Follow the app's own pairing, Local Network, tunnel/VPN, Apple Account authentication, two-factor, and signing prompts. The app signs the imported IPA with your developer session and then requests installation over the paired device connection.
 
-The workflow rewrites the main app's bundle ID and adjusts its embedded app-extension IDs to match. This avoids trying to provision Discord's original publisher-owned identifier with your personal account. Use an identifier that your signing account can register; if you change it, ensure it is the identifier used by your provisioning profile. The tweak still reports Discord's expected identifier to its own code at runtime.\n\nThe exact prerequisites depend on your iPadOS version. The pairing/tunnel steps must be completed before installation; this is not a one-tap Safari or OTA install. A successful GitHub build only confirms that the IPA archive is structurally valid. It does not prove that Apple will accept the signing request or that the app will launch on your device.
+The workflow rewrites the main app's bundle ID and adjusts its embedded app-extension IDs to match. This avoids trying to provision Discord's original publisher-owned identifier with your personal account. Use an identifier that your signing account can register; if you change it, ensure it is the identifier used by your provisioning profile. The tweak still reports Discord's expected identifier to its own code at runtime.
+
+The exact prerequisites depend on your iPadOS version. The pairing/tunnel steps must be completed before installation; this is not a one-tap Safari or OTA install. A successful GitHub build only confirms that the IPA archive is structurally valid. It does not prove that Apple will accept the signing request or that the app will launch on your device.
 
 ## Troubleshooting
 
