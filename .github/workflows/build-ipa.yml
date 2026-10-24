@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: "Direct HTTPS URL to a decrypted Discord IPA"
-        required: true
+        description: "Optional direct HTTPS URL; leave blank to use a Discord IPA attached to the latest GitHub Release"
+        required: false
+        default: ""
         type: string
       bundle_id:
         description: "Unique bundle ID to use for your own signing profile"
@@ -28,6 +29,7 @@ jobs:
     env:
       IPA_URL: ${{ inputs.ipa_url }}
       BUNDLE_ID: ${{ inputs.bundle_id }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout RainTweak27
         uses: actions/checkout@v4
