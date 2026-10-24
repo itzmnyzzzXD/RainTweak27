@@ -518,9 +518,8 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
     NSData *data = [NSData dataWithContentsOfURL:sourceURL options:0 error:&readError];
     if (didAccess) [sourceURL stopAccessingSecurityScopedResource];
 
-    NSDictionary *theme = nil;
     NSString *reason = nil;
-    if (!data || !validateThemeData(data, &theme, &reason)) {
+    if (!data || !validateThemeData(data, NULL, &reason)) {
         showErrorAlert(@"Invalid Theme",
                        reason ?: readError.localizedDescription ?: @"The file could not be read.",
                        nil);
