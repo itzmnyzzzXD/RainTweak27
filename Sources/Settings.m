@@ -13,12 +13,138 @@
 - (void)copyDiagnostics;
 @end
 
+static NSArray *presetThemeColors(NSString *hex) {
+    // Rain's semantic theme mapping may index by Discord's base-theme index.
+    return @[hex, hex, hex, hex];
+}
+
+static NSDictionary *makePresetTheme(NSString *name,
+                                     NSString *background,
+                                     NSString *surface,
+                                     NSString *surfaceAlt,
+                                     NSString *accent,
+                                     NSString *accentBright,
+                                     NSString *text,
+                                     NSString *muted,
+                                     NSString *selection) {
+    NSDictionary *palette = @{
+        @"HEADER_PRIMARY": text,
+        @"HEADER_SECONDARY": muted,
+        @"TEXT_NORMAL": text,
+        @"TEXT_MUTED": muted,
+        @"TEXT_LINK": accentBright,
+        @"INTERACTIVE_NORMAL": muted,
+        @"INTERACTIVE_HOVER": accentBright,
+        @"INTERACTIVE_ACTIVE": text,
+        @"INTERACTIVE_MUTED": @"#505866",
+        @"BACKGROUND_PRIMARY": background,
+        @"BACKGROUND_SECONDARY": surface,
+        @"BACKGROUND_SECONDARY_ALT": surface,
+        @"BACKGROUND_TERTIARY": surfaceAlt,
+        @"BACKGROUND_ACCENT": selection,
+        @"BACKGROUND_FLOATING": surface,
+        @"BACKGROUND_MOBILE_PRIMARY": background,
+        @"BACKGROUND_MOBILE_SECONDARY": surface,
+        @"BACKGROUND_NESTED_FLOATING": background,
+        @"BACKGROUND_MESSAGE_HOVER": surfaceAlt,
+        @"BACKGROUND_MODIFIER_HOVER": surfaceAlt,
+        @"BACKGROUND_MODIFIER_ACTIVE": selection,
+        @"BACKGROUND_MODIFIER_SELECTED": selection,
+        @"BACKGROUND_MODIFIER_ACCENT": selection,
+        @"CHANNELTEXTAREA_BACKGROUND": surface,
+        @"CHANNELS_DEFAULT": accentBright,
+        @"TEXT_DANGER": @"#FF5470",
+        @"KEYBOARD": background,
+        @"CHAT_BACKGROUND": background,
+        @"SPOILER_HIDDEN_BACKGROUND": surfaceAlt,
+        @"SPOILER_REVEALED_BACKGROUND": surface
+    };
+
+    NSMutableDictionary *semantic = [NSMutableDictionary dictionaryWithCapacity:palette.count];
+    [palette enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
+        semantic[key] = presetThemeColors(value);
+    }];
+
+    NSDictionary *raw = @{
+        @"PRIMARY_100": text,
+        @"PRIMARY_200": muted,
+        @"PRIMARY_300": accent,
+        @"PRIMARY_360": accentBright,
+        @"PRIMARY_400": accent,
+        @"PRIMARY_500": accent,
+        @"PRIMARY_600": background,
+        @"PRIMARY_630": surfaceAlt,
+        @"PRIMARY_660": surfaceAlt,
+        @"PRIMARY_700": surface,
+        @"PRIMARY_800": background,
+        @"BRAND_260": accent,
+        @"BRAND_360": accentBright,
+        @"BRAND_500": accent,
+        @"BRAND_560": accentBright,
+        @"WHITE_500": text,
+        @"YELLOW_300": @"#FFD479",
+        @"GREEN_360": @"#5BE6B2",
+        @"RED_400": @"#FF5470"
+    };
+
+    return @{
+        @"name": name,
+        @"description": @"RainTweak27 built-in palette",
+        @"data": @{
+            @"spec": @2,
+            @"semanticColors": semantic,
+            @"rawColors": raw
+        }
+    };
+}
+
+static void installBuiltInThemePresets(NSURL *directory) {
+    NSArray<NSDictionary *> *presets = @[
+        @{
+            @"file": @"Preset-OLED-Blue.json",
+            @"theme": makePresetTheme(@"OLED Blue", @"#03060B", @"#0B111B", @"#121E2D",
+                                      @"#398BFF", @"#8FC3FF", @"#F4F7FF", @"#91A0B5", @"#17365B")
+        },
+        @{
+            @"file": @"Preset-OLED-Purple.json",
+            @"theme": makePresetTheme(@"OLED Purple", @"#07040D", @"#120A1E", @"#1D1030",
+                                      @"#9D63FF", @"#D0ABFF", @"#FAF5FF", @"#B0A0C2", @"#3B2160")
+        },
+        @{
+            @"file": @"Preset-Midnight-Teal.json",
+            @"theme": makePresetTheme(@"Midnight Teal", @"#030909", @"#0A1718", @"#102526",
+                                      @"#20C9B0", @"#86F5E4", @"#F0FFFC", @"#91BDB7", @"#174B48")
+        },
+        @{
+            @"file": @"Preset-Graphite.json",
+            @"theme": makePresetTheme(@"Graphite", @"#090A0C", @"#14171B", @"#20242A",
+                                      @"#9CA9BA", @"#E5ECF5", @"#F5F7FA", @"#9AA4B1", @"#343D49")
+        }
+    ];
+
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    for (NSDictionary *preset in presets) {
+        NSURL *fileURL = [directory URLByAppendingPathComponent:preset[@"file"]];
+        if ([fileManager fileExistsAtPath:fileURL.path]) continue;
+
+        NSError *jsonError = nil;
+        NSData *data = [NSJSONSerialization dataWithJSONObject:preset[@"theme"]
+                                                       options:NSJSONWritingPrettyPrinted
+                                                         error:&jsonError];
+        if (!data || ![data writeToURL:fileURL options:NSDataWritingAtomic error:&jsonError]) {
+            BunnyLog(@"Could not install built-in theme %@: %@",
+                     preset[@"file"], jsonError.localizedDescription ?: @"unknown error");
+        }
+    }
+}
+
 static NSURL *themeDirectoryURL(void) {
     NSURL *directory = [getRainDirectory() URLByAppendingPathComponent:@"themes" isDirectory:YES];
     [[NSFileManager defaultManager] createDirectoryAtURL:directory
                              withIntermediateDirectories:YES
                                               attributes:nil
                                                    error:nil];
+    installBuiltInThemePresets(directory);
     return directory;
 }
 
