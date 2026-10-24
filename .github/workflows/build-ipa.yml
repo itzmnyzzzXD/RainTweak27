@@ -36,35 +36,54 @@ jobs:
         with:
           submodules: true
 
-      - name: Verify Xcode 27 and validate input URL
+      - name: Verify Xcode 27 and validate build settings
         run: |
           set -euo pipefail
-          echo "::add-mask::$IPA_URL"
+          if [ -n "$IPA_URL" ]; then
+            echo "::add-mask::$IPA_URL"
+          fi
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           python3 - <<'PY'
           import os, re
           from urllib.parse import urlparse
           value = os.environ.get("IPA_URL", "").strip()
-          parsed = urlparse(value)
-          if parsed.scheme != "https" or not parsed.hostname:
-              raise SystemExit("ipa_url must be a direct HTTPS URL.")
-          if parsed.username or parsed.password:
-              raise SystemExit("Do not put credentials in the IPA URL. Use a public or time-limited download URL.")
+          if value:
+              parsed = urlparse(value)
+              if parsed.scheme != "https" or not parsed.hostname:
+                  raise SystemExit("ipa_url must be a direct HTTPS URL.")
+              if parsed.username or parsed.password:
+                  raise SystemExit("Do not put credentials in the IPA URL.")
           bundle_id = os.environ.get("BUNDLE_ID", "").strip()
-          if not re.fullmatch(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", bundle_id):
+          if not re.fullmatch(r"[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+", bundle_id):
               raise SystemExit("bundle_id must be a dotted identifier (example: com.example.discord).")
           print(f"Using signing bundle ID: {bundle_id}")
           PY
 
-      - name: Download input Discord IPA
+      - name: Download Discord IPA automatically
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 900 \
-            "$IPA_URL" --output discord.ipa
+          if [ -n "$IPA_URL" ]; then
+            echo "Using the optional direct IPA URL provided for this run."
+            curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 900 \
+              "$IPA_URL" --output discord.ipa
+          else
+            echo "No URL provided. Looking for a .ipa attached to the latest RainTweak27 GitHub Release..."
+            RELEASE_JSON="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" 2>/dev/null || true)"
+            if [ -z "$RELEASE_JSON" ]; then
+              echo "::error::No latest release with a source IPA could be found. Attach an authorized, decrypted Discord IPA named Discord.ipa to a release, or provide the optional URL."
+              exit 1
+            fi
+            ASSET_URL="$(printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=[x for x in d.get("assets",[]) if x.get("name","").lower() in ("discord.ipa","discord-decrypted.ipa")]; print(a[0]["url"] if a else "")')"
+            if [ -z "$ASSET_URL" ]; then
+              echo "::error::The latest release has no Discord.ipa or Discord-decrypted.ipa asset. Attach an authorized, decrypted Discord IPA with one of those names, or provide the optional URL."
+              exit 1
+            fi
+            gh api "$ASSET_URL" -H "Accept: application/octet-stream" > discord.ipa
+          fi
           test -s discord.ipa
           unzip -tq discord.ipa
-          echo "Input IPA downloaded and ZIP integrity checked."
+          echo "Source IPA downloaded and ZIP integrity checked."
 
       - name: Resolve Theos cache key
         run: |
