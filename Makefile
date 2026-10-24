@@ -11,8 +11,8 @@ TWEAK_NAME = RainTweak
 BUNDLE_NAME = BunnyResources
 
 RainTweak_FILES = $(wildcard Sources/*.x Sources/*.xm Sources/*.m Sources/*.mm Sources/**/*.x Sources/**/*.xm Sources/**/*.m Sources/**/*.mm)
-RainTweak_CFLAGS = -fobjc-arc -DPACKAGE_VERSION='@"$(THEOS_PACKAGE_BASE_VERSION)"' -I$(THEOS_PROJECT_DIR)/Headers
-RainTweak_CCFLAGS = -std=c++17 -Wno-c++11-narrowing -I$(THEOS_PROJECT_DIR)/Headers
+RainTweak_CFLAGS = -fobjc-arc -Wno-error=deprecated-declarations -DPACKAGE_VERSION='@"$(THEOS_PACKAGE_BASE_VERSION)"' -I$(THEOS_PROJECT_DIR)/Headers
+RainTweak_CCFLAGS = -std=c++17 -Wno-c++11-narrowing -Wno-error=deprecated-declarations -I$(THEOS_PROJECT_DIR)/Headers
 RainTweak_FRAMEWORKS = Foundation UIKit CoreGraphics CoreText CoreFoundation UniformTypeIdentifiers MediaPlayer
 RainTweak_LDFLAGS = -undefined dynamic_lookup
 
