@@ -101,6 +101,7 @@ print_success "Installed cyan"
 NAME=$(grep '^Name:' control | cut -d ' ' -f 2)
 PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)
 VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
+BUNDLE_ID="${BUNDLE_ID:-com.itzmnyzzxd.discord}"
 DEB_FILE="packages/${PACKAGE}_${VERSION}_iphoneos-arm64.deb"
 
 print_status "Injecting tweak..."
@@ -111,7 +112,7 @@ fi
 
 # Keep this output unsigned for the downstream on-device signer.
 # -s/--fakesign is for AppSync/TrollStore, not FrozenApps' normal signing flow.
-cyan -duwgq -i "$IPA_FILE" -o "$NAME.ipa" -l patch.plist -f "${INJECTION_FILES[@]}"
+cyan -duwgq -i "$IPA_FILE" -o "$NAME.ipa" -b "$BUNDLE_ID" -l patch.plist -f "${INJECTION_FILES[@]}"
 
 if [ $? -ne 0 ]; then
     print_error "Failed to inject tweak"
