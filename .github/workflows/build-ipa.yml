@@ -132,7 +132,9 @@ jobs:
             echo "Could not read the package Name from control."
             exit 1
           fi
-          cyan -uwsgq -i discord.ipa -o "${APP_NAME}.ipa" -l patch.plist \
+          # Do not use -s/--fakesign here. FrozenApps signs this IPA using the
+          # user's own Apple developer session before installing it on-device.
+          cyan -duwgq -i discord.ipa -o "${APP_NAME}.ipa" -l patch.plist \
             -f "$DEB_FILE" OpenInDiscord/build/OpenInDiscord.appex
           test -s "${APP_NAME}.ipa"
           echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
@@ -162,18 +164,30 @@ jobs:
             echo "Discord version: $APP_VERSION"
             echo "Tweak package: $DEB_FILE"
             echo "IPA size bytes: $(stat -f%z "${APP_NAME}.ipa")"
+            echo "Signing: intentionally not fake-signed; import into FrozenApps and sign before installation."
             echo "Note: successful archive validation is not proof of runtime iOS 27 compatibility."
           } > build-info.txt
+          shasum -a 256 "${APP_NAME}.ipa" > "${APP_NAME}.ipa.sha256"
           cat build-info.txt
+          cat "${APP_NAME}.ipa.sha256"
 
-      - name: Upload RainTweak IPA artifact
+      - name: Upload IPA for FrozenApps
         uses: actions/upload-artifact@v4
         with:
-          name: RainTweak27-IPA
+          name: RainTweak27-IPA-for-FrozenApps
           path: |
             ${{ env.APP_NAME }}.ipa
-            ${{ env.DEB_FILE }}
+            ${{ env.APP_NAME }}.ipa.sha256
             build-info.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload rootless package separately
+        uses: actions/upload-artifact@v4
+        with:
+          name: RainTweak27-rootless-package
+          path: ${{ env.DEB_FILE }}
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
