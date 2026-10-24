@@ -506,6 +506,15 @@ NSString *urlString = [NSString stringWithFormat:@"https://codeberg.org/raincord
 
     for (NSURL *themeURL in themeURLs) {
         NSString *title = [themeURL.lastPathComponent stringByDeletingPathExtension];
+        NSData *themeData = [NSData dataWithContentsOfURL:themeURL];
+        NSDictionary *themeObject = themeData
+            ? [NSJSONSerialization JSONObjectWithData:themeData options:0 error:nil]
+            : nil;
+        if ([themeObject[@"name"] isKindOfClass:[NSString class]] &&
+            [themeObject[@"name"] length] > 0) {
+            title = themeObject[@"name"];
+        }
+
         [alert addAction:[UIAlertAction actionWithTitle:title
                                                   style:UIAlertActionStyleDefault
                                                 handler:^(UIAlertAction *action) {
