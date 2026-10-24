@@ -171,7 +171,7 @@ static NSDictionary<NSString *, BridgeHandler> *bridgeHandlers(void)
                     NSURL *rainDirectory = getRainDirectory();
                     downloadBundleForNextLaunch(rainDirectory);
                     dispatch_async(dispatch_get_main_queue(), ^{
-                        UIWindow *w = [UIApplication sharedApplication].windows.firstObject;
+                        UIWindow *w = getForegroundKeyWindow();
                         if (w.rootViewController) {
                             reloadApp(w.rootViewController);
                         }
