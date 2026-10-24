@@ -1,5 +1,5 @@
 name: Deploy Build
-run-name: ${{ github.event.inputs.release == 'true' && 'Release' || 'Build' }} for ${{ github.event.inputs.ipa_url }}
+run-name: ${{ github.event.inputs.release == 'true' && 'Release' || 'Build' }} RainTweak27 IPA
 
 on:
   workflow_dispatch:
@@ -107,7 +107,8 @@ jobs:
 
       - name: Set GNU Make path
         run: |
-          echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> $GITHUB_ENV
+          brew install make
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Build packages
         if: env.DEB_DOWNLOADED == 'false'
@@ -168,6 +169,9 @@ jobs:
           repository: castdrian/OpenInDiscord
           path: OpenInDiscord
 
+      - name: Install extension build utilities
+        run: brew install xcbeautify
+
       - name: Build Safari Extension
         run: |
           cd OpenInDiscord
@@ -196,7 +200,14 @@ jobs:
           echo "APP_NAME=$NAME" >> $GITHUB_ENV
 
       - name: Install cyan
-        run: pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
+        run: |
+          set -euo pipefail
+          brew install python@3.13
+          "$(brew --prefix python@3.13)/bin/python3.13" -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow lief
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Inject unsigned IPA for FrozenApps signing
         run: |
@@ -345,7 +356,7 @@ jobs:
       - name: Download IPA artifact
         uses: actions/download-artifact@v4
         with:
-          name: ipa
+          name: RainTweak27-IPA-for-FrozenApps
 
       - name: Update app-repo.json
         run: |
