@@ -31,6 +31,7 @@ jobs:
       - name: Verify Xcode 27 and validate input URL
         run: |
           set -euo pipefail
+          echo "::add-mask::$IPA_URL"
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           python3 - <<'PY'
@@ -71,7 +72,7 @@ jobs:
 
       - name: Install build utilities
         run: |
-          brew install make xcbeautify
+          brew install make xcbeautify python@3.13
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Build rootless tweak package
@@ -116,7 +117,7 @@ jobs:
       - name: Install IPA injection tool
         run: |
           set -euo pipefail
-          python3 -m venv .venv
+          "$(brew --prefix python@3.13)/bin/python3.13" -m venv .venv
           source .venv/bin/activate
           python -m pip install --upgrade pip
           python -m pip install --force-reinstall \
