@@ -53,6 +53,6 @@ The workflow preserves the original package build and app-injection flow. iOS 27
 
 ## Install on iPad through FrozenApps
 
-The workflow outputs an intentionally non-fake-signed IPA for FrozenApps/SideStick's **Custom IPA → Sign → Install** flow. Download the `RainTweak27-IPA-for-FrozenApps` Actions artifact, extract the ZIP in Files, then import the actual `.ipa` via **Files → IPA Library → Import IPA** and tap **Load into Signer**. In Signer, choose the Custom IPA source and follow its pairing, tunnel, Apple Account, signing, and installation prompts. The build does not sign an app with your personal certificate in CI.
+The workflow outputs an intentionally non-fake-signed IPA with the default signing bundle ID `com.itzmnyzzxd.discord` for FrozenApps/SideStick's **Custom IPA → Sign → Install** flow. You can change the ID when dispatching the workflow if your provisioning setup requires another identifier. Download the `RainTweak27-IPA-for-FrozenApps` Actions artifact, extract the ZIP in Files, then import the actual `.ipa` via **Files → IPA Library → Import IPA** and tap **Load into Signer**. In Signer, choose the Custom IPA source and follow its pairing, tunnel, Apple Account, signing, and installation prompts. The build does not sign an app with your personal certificate in CI.
 
 See [INSTALL-WITH-FROZENAPPS.md](INSTALL-WITH-FROZENAPPS.md) for the complete flow and troubleshooting. This is not direct OTA installation; iOS requires the IPA to be signed and installed using a supported method.
