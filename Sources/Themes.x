@@ -364,8 +364,11 @@ BOOL isThemeLight(UIColor *color) {
 %end
 
 void initializeThemeColors(NSDictionary *semanticColors, NSDictionary *rawColors) {
-    if (!semanticColors || !rawColors)
+    if (![semanticColors isKindOfClass:[NSDictionary class]] ||
+        ![rawColors isKindOfClass:[NSDictionary class]]) {
+        BunnyLog(@"Skipping theme initialization: semantic/raw color maps are missing.");
         return;
+    }
 
     BunnyLog(@"Initializing theme (%lu semantic colors, %lu raw colors)",
              (unsigned long)semanticColors.count, (unsigned long)rawColors.count);
@@ -378,11 +381,47 @@ void initializeThemeColors(NSDictionary *semanticColors, NSDictionary *rawColors
     swizzleRawColorMethods();
 }
 
+static void initializeCurrentThemeFromDisk(void) {
+    NSDictionary *theme = getCurrentTheme();
+    if (![theme isKindOfClass:[NSDictionary class]]) {
+        BunnyLog(@"No active theme to initialize.");
+        return;
+    }
+
+    NSDictionary *data = [theme[@"data"] isKindOfClass:[NSDictionary class]] ? theme[@"data"] : nil;
+    NSNumber *rawSpec = data[@"spec"];
+    NSInteger spec = rawSpec ? rawSpec.integerValue : 3;
+    NSDictionary *semantic = nil;
+    NSDictionary *raw = nil;
+
+    if (spec == 3) {
+        NSDictionary *main = [theme[@"main"] isKindOfClass:[NSDictionary class]] ? theme[@"main"] : nil;
+        semantic = [main[@"semantic"] isKindOfClass:[NSDictionary class]] ? main[@"semantic"] : nil;
+        raw = [main[@"rawColors"] isKindOfClass:[NSDictionary class]] ? main[@"rawColors"] : nil;
+        if (!raw) raw = [main[@"raw"] isKindOfClass:[NSDictionary class]] ? main[@"raw"] : nil;
+    } else if (spec == 2) {
+        semantic = [data[@"semanticColors"] isKindOfClass:[NSDictionary class]] ? data[@"semanticColors"] : nil;
+        raw = [data[@"rawColors"] isKindOfClass:[NSDictionary class]] ? data[@"rawColors"] : nil;
+    } else if (spec == 1) {
+        semantic = [data[@"theme_color_map"] isKindOfClass:[NSDictionary class]] ? data[@"theme_color_map"] : nil;
+        raw = [data[@"rawColors"] isKindOfClass:[NSDictionary class]] ? data[@"rawColors"] : nil;
+    }
+
+    if (!semantic.count || !raw.count) {
+        BunnyLog(@"Active theme has no compatible semantic/raw maps (spec %@).",
+                 rawSpec ?: @3);
+        return;
+    }
+
+    initializeThemeColors(semantic, raw);
+}
+
 %ctor {
 
     NSBundle* bundle = [NSBundle bundleWithPath:@"/System/Library/PrivateFrameworks/TextInputUI.framework"];
 	if (!bundle.loaded) [bundle load];
 
 	%init(KEYBOARD);
+    initializeCurrentThemeFromDisk();
 
 }
