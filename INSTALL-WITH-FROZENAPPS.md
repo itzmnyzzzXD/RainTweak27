@@ -27,3 +27,9 @@ The workflow rewrites the main app's bundle ID and adjusts its embedded app-exte
 - **App opens but Rain doesn't load:** confirm that the source Discord IPA is compatible with the current tweak and that its React Native architecture meets RainTweak's requirements.
 
 Only use IPA files you are authorised to modify and install. Keep the downloaded IPA private unless you have the rights needed to redistribute the modified Discord app.
+
+## Optional: load a release directly from FrozenApps App Catalog
+
+For a download directly inside FrozenApps/SideStick, use [Actions → Deploy Build](https://github.com/itzmnyzzzXD/RainTweak27/actions/workflows/deploy.yml), set **Release the build** to true, and let it create a GitHub release containing the actual `RainTweak.ipa` asset. Then open **Center → App Catalog**, add `itzmnyzzzXD/RainTweak27` as a custom source, and choose **Download & prepare** on the IPA release. Finish in Signer using **Custom IPA → Install**.
+
+This publishes the modified Discord IPA as a public release asset. Use this route only when you have the rights needed to redistribute that modified app; otherwise use Option A and keep the artifact private.
